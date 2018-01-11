@@ -6,6 +6,11 @@ PDF.js is community-driven and supported by Mozilla Labs. Our goal is to
 create a general-purpose, web standards-based platform for parsing and
 rendering PDFs.
 
+# This fork
+This fork supports loading PDF in chunks and doesn't allocate memory for the whole PDF on initial load. 
+
+This makes it possible to load and process multi-gigabyte PDFs in browsers.
+
 ## Contributing
 
 PDF.js is an open source project and always looking for more contributors. To
