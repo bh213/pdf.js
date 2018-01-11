@@ -1,5 +1,3 @@
-/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 /* Copyright 2014 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,26 +12,50 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/*jshint globalstrict: false */
-/* globals PDFJS, PDFViewer, PDFPageView, TextLayerBuilder,
-           DefaultTextLayerFactory, AnnotationsLayerBuilder,
-           DefaultAnnotationsLayerFactory */
+/* jshint globalstrict: false */
+/* umdutils ignore */
 
-// Initializing PDFJS global object (if still undefined)
-if (typeof PDFJS === 'undefined') {
-  (typeof window !== 'undefined' ? window : this).PDFJS = {};
-}
-
-(function pdfViewerWrapper() {
+(function (root, factory) {
+  'use strict';
+  if (typeof define === 'function' && define.amd) {
+    define('pdfjs-dist/web/pdf_viewer', ['exports', 'pdfjs-dist/build/pdf'],
+      factory);
+  } else if (typeof exports !== 'undefined') {
+    factory(exports, require('../build/pdf.js'));
+  } else {
+    factory((root.pdfjsDistWebPDFViewer = {}), root.pdfjsDistBuildPdf);
+  }
+}(this, function (exports, pdfjsLib) {
   'use strict';
 
-//#include ui_utils.js
-//#include pdf_viewer.js
+  var pdfViewerLibs = {
+    pdfjsWebPDFJS: pdfjsLib
+  };
 
-  PDFJS.PDFViewer = PDFViewer;
-  PDFJS.PDFPageView = PDFPageView;
-  PDFJS.TextLayerBuilder = TextLayerBuilder;
-  PDFJS.DefaultTextLayerFactory = DefaultTextLayerFactory;
-  PDFJS.AnnotationsLayerBuilder = AnnotationsLayerBuilder;
-  PDFJS.DefaultAnnotationsLayerFactory = DefaultAnnotationsLayerFactory;
-}).call((typeof window === 'undefined') ? this : window);
+  (function () {
+//#expand __BUNDLE__
+  }).call(pdfViewerLibs);
+
+  var PDFJS = pdfjsLib.PDFJS;
+
+  PDFJS.PDFViewer = pdfViewerLibs.pdfjsWebPDFViewer.PDFViewer;
+  PDFJS.PDFPageView = pdfViewerLibs.pdfjsWebPDFPageView.PDFPageView;
+  PDFJS.PDFLinkService = pdfViewerLibs.pdfjsWebPDFLinkService.PDFLinkService;
+  PDFJS.TextLayerBuilder =
+    pdfViewerLibs.pdfjsWebTextLayerBuilder.TextLayerBuilder;
+  PDFJS.DefaultTextLayerFactory =
+    pdfViewerLibs.pdfjsWebTextLayerBuilder.DefaultTextLayerFactory;
+  PDFJS.AnnotationLayerBuilder =
+    pdfViewerLibs.pdfjsWebAnnotationLayerBuilder.AnnotationLayerBuilder;
+  PDFJS.DefaultAnnotationLayerFactory =
+    pdfViewerLibs.pdfjsWebAnnotationLayerBuilder.DefaultAnnotationLayerFactory;
+  PDFJS.PDFHistory = pdfViewerLibs.pdfjsWebPDFHistory.PDFHistory;
+  PDFJS.PDFFindController =
+    pdfViewerLibs.pdfjsWebPDFFindController.PDFFindController;
+  PDFJS.EventBus = pdfViewerLibs.pdfjsWebUIUtils.EventBus;
+
+  PDFJS.DownloadManager = pdfViewerLibs.pdfjsWebDownloadManager.DownloadManager;
+  PDFJS.ProgressBar = pdfViewerLibs.pdfjsWebUIUtils.ProgressBar;
+
+  exports.PDFJS = PDFJS;
+}));

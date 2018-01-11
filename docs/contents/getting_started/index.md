@@ -51,8 +51,8 @@ Before downloading PDF.js please take a moment to understand the different layer
   <div class="col-md-6">
     <h3>Source</h3>
     To get a local copy of the current code, clone it using git:
-    <pre><code>$ git clone git://github.com/mozilla/pdf.js.git pdfjs
-$ cd pdfjs
+    <pre><code>$ git clone git://github.com/mozilla/pdf.js.git
+$ cd pdf.js
 </code></pre>
   </div>
 </div>
@@ -107,7 +107,7 @@ $ cd pdfjs
 
 ## Trying the Viewer
 
-With the prebuilt or source version open `web/viewer.html` in a browser and the test pdf should load. Note: the worker is not enabled for file:// urls, so use a server. If you're using the source build and have node, you can run `node make server`.
+With the prebuilt or source version open `web/viewer.html` in a browser and the test pdf should load. Note: the worker is not enabled for file:// urls, so use a server. If you're using the source build and have node, you can run `gulp server`.
 
 ## More Information
 

@@ -1,5 +1,3 @@
-/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 /* Copyright 2012 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,14 +12,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals watchScroll, getVisibleElements, scrollIntoView, PDFThumbnailView,
-           Promise */
 
 'use strict';
 
-var THUMBNAIL_SCROLL_MARGIN = -19;
+(function (root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    define('pdfjs-web/pdf_thumbnail_viewer', ['exports',
+      'pdfjs-web/ui_utils', 'pdfjs-web/pdf_thumbnail_view'], factory);
+  } else if (typeof exports !== 'undefined') {
+    factory(exports, require('./ui_utils.js'),
+      require('./pdf_thumbnail_view.js'));
+  } else {
+    factory((root.pdfjsWebPDFThumbnailViewer = {}), root.pdfjsWebUIUtils,
+      root.pdfjsWebPDFThumbnailView);
+  }
+}(this, function (exports, uiUtils, pdfThumbnailView) {
 
-//#include pdf_thumbnail_view.js
+var watchScroll = uiUtils.watchScroll;
+var getVisibleElements = uiUtils.getVisibleElements;
+var scrollIntoView = uiUtils.scrollIntoView;
+var PDFThumbnailView = pdfThumbnailView.PDFThumbnailView;
+
+var THUMBNAIL_SCROLL_MARGIN = -19;
 
 /**
  * @typedef {Object} PDFThumbnailViewerOptions
@@ -149,7 +161,8 @@ var PDFThumbnailViewer = (function PDFThumbnailViewerClosure() {
             id: pageNum,
             defaultViewport: viewport.clone(),
             linkService: this.linkService,
-            renderingQueue: this.renderingQueue
+            renderingQueue: this.renderingQueue,
+            disableCanvasToImageConversion: false,
           });
           this.thumbnails.push(thumbnail);
         }
@@ -157,7 +170,7 @@ var PDFThumbnailViewer = (function PDFThumbnailViewerClosure() {
     },
 
     /**
-     * @param {PDFPageView} pageView
+     * @param {PDFThumbnailView} thumbView
      * @returns {PDFPage}
      * @private
      */
@@ -180,13 +193,6 @@ var PDFThumbnailViewer = (function PDFThumbnailViewerClosure() {
       return promise;
     },
 
-    ensureThumbnailVisible:
-        function PDFThumbnailViewer_ensureThumbnailVisible(page) {
-      // Ensure that the thumbnail of the current page is visible
-      // when switching from another view.
-      scrollIntoView(document.getElementById('thumbnailContainer' + page));
-    },
-
     forceRendering: function () {
       var visibleThumbs = this._getVisibleThumbs();
       var thumbView = this.renderingQueue.getHighestPriority(visibleThumbs,
@@ -204,3 +210,6 @@ var PDFThumbnailViewer = (function PDFThumbnailViewerClosure() {
 
   return PDFThumbnailViewer;
 })();
+
+exports.PDFThumbnailViewer = PDFThumbnailViewer;
+}));

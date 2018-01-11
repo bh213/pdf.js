@@ -11,9 +11,9 @@ rendering PDFs.
 PDF.js is an open source project and always looking for more contributors. To
 get involved checkout:
 
-+ [Workflow](https://github.com/mozilla/pdf.js/wiki/Contributing)
-+ [Style Guide](https://github.com/mozilla/pdf.js/wiki/Style-Guide)
-+ [FAQ](https://github.com/mozilla/pdf.js/wiki/Frequently-Asked-Questions)
++ [Issue Reporting Guide](https://github.com/mozilla/pdf.js/blob/master/.github/CONTRIBUTING.md)
++ [Code Contribution Guide](https://github.com/mozilla/pdf.js/wiki/Contributing)
++ [Frequently Asked Questions](https://github.com/mozilla/pdf.js/wiki/Frequently-Asked-Questions)
 + [Good Beginner Bugs](https://github.com/mozilla/pdf.js/issues?direction=desc&labels=5-good-beginner-bug&page=1&sort=created&state=open)
 + [Priorities](https://github.com/mozilla/pdf.js/milestones)
 + [Attend a Public Meeting](https://github.com/mozilla/pdf.js/wiki/Weekly-Public-Meetings)
@@ -29,43 +29,47 @@ irc.mozilla.org.
 
 ### Browser Extensions
 
-#### Firefox
+#### Firefox and Seamonkey
 
-PDF.js is built into version 19+ of Firefox, however one extension is still available:
+PDF.js is built into version 19+ of Firefox, however the extension is still available:
 
-+ [Development Version](http://mozilla.github.io/pdf.js/extensions/firefox/pdf.js.xpi) - This version is updated every time new code is merged into the PDF.js codebase. This should be quite stable but still might break from time to time.
++ [Development Version](http://mozilla.github.io/pdf.js/extensions/firefox/pdf.js.xpi) - This version is updated every time new code is merged into the PDF.js codebase. This should be quite stable but still might break from time to time. This version is also reported to work when installed as extension in Seamonkey 2.39.
 
-#### Chrome and Opera
+#### Chrome
 
-The Chromium extension is still somewhat experimental but it can be installed two
-ways:
-
-+ [Unofficial Version](https://chrome.google.com/webstore/detail/pdf-viewer/oemmndcbldboiebfnladdacbdfmadadm) - *This extension is maintained by a PDF.js contributor.*
-+ Build Your Own - Get the code as explained below and issue `node make chromium`. Then open
++ The official extension for Chrome can be installed from the [Chrome Web Store](https://chrome.google.com/webstore/detail/pdf-viewer/oemmndcbldboiebfnladdacbdfmadadm).
+*This extension is maintained by [@Rob--W](https://github.com/Rob--W).*
++ Build Your Own - Get the code as explained below and issue `gulp chromium`. Then open
 Chrome, go to `Tools > Extension` and load the (unpackaged) extension from the
 directory `build/chromium`.
-
-The version of the extension for the Opera browser can be found at the [Opera add-ons catalog](https://addons.opera.com/en/extensions/details/pdf-viewer/).
 
 ## Getting the Code
 
 To get a local copy of the current code, clone it using git:
 
-    $ git clone git://github.com/mozilla/pdf.js.git pdfjs
-    $ cd pdfjs
+    $ git clone git://github.com/mozilla/pdf.js.git
+    $ cd pdf.js
 
-Next, you need to start a local web server as some browsers don't allow opening
-PDF files for a file:// url:
+Next, install Node.js via the [official package](http://nodejs.org) or via
+[nvm](https://github.com/creationix/nvm). You need to install the gulp package
+globally (see also [gulp's getting started](https://github.com/gulpjs/gulp/blob/master/docs/getting-started.md#getting-started)):
 
-    $ node make server
+    $ npm install -g gulp-cli
 
-You can install Node via [nvm](https://github.com/creationix/nvm) or the
-[official package](http://nodejs.org). If everything worked out, you can now
-serve
+If everything worked out, install all dependencies for PDF.js:
+
+    $ npm install
+
+Finally you need to start a local web server as some browsers do not allow opening
+PDF files using a file:// URL. Run
+
+    $ gulp server
+
+and then you can open
 
 + http://localhost:8888/web/viewer.html
 
-You can also view all the test pdf files on the right side serving
+It is also possible to view all test PDF files on the right side by opening
 
 + http://localhost:8888/test/pdfs/?frame
 
@@ -74,13 +78,20 @@ You can also view all the test pdf files on the right side serving
 In order to bundle all `src/` files into two productions scripts and build the generic
 viewer, issue:
 
-    $ node make generic
+    $ gulp generic
 
 This will generate `pdf.js` and `pdf.worker.js` in the `build/generic/build/` directory.
 Both scripts are needed but only `pdf.js` needs to be included since `pdf.worker.js` will
 be loaded by `pdf.js`. If you want to support more browsers than Firefox you'll also need
 to include `compatibility.js` from `build/generic/web/`. The PDF.js files are large and
 should be minified for production.
+
+## Using PDF.js in a web application
+
+To use PDF.js in a web application you can choose to use a pre-built version of the library
+or to build it from source. We supply pre-built versions for usage with NPM and Bower under
+the `pdfjs-dist` name. For more information and examples please refer to the
+[wiki page](https://github.com/mozilla/pdf.js/wiki/Setup-pdf.js-in-a-website) on this subject.
 
 ## Learning
 

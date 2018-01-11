@@ -1,5 +1,3 @@
-/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 /* Copyright 2013 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +15,21 @@
 /* globals HTMLCanvasElement */
 
 'use strict';
-(function mozPrintCallbackPolyfillClosure() {
+
+(function (root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    define('pdfjs-web/mozPrintCallback_polyfill', ['exports'], factory);
+  } else if (typeof exports !== 'undefined') {
+    factory(exports);
+  } else {
+    factory((root.pdfjsWebMozPrintCallbackPolyfill = {}));
+  }
+}(this, function (exports) {
+//#if !(FIREFOX || MOZCENTRAL)
   if ('mozPrintCallback' in document.createElement('canvas')) {
     return;
   }
+
   // Cause positive result on feature-detection:
   HTMLCanvasElement.prototype.mozPrintCallback = undefined;
 
@@ -82,7 +91,7 @@
 
   function renderProgress() {
     var progressContainer = document.getElementById('mozPrintCallback-shim');
-    if (canvases) {
+    if (canvases && canvases.length) {
       var progress = Math.round(100 * index / canvases.length);
       var progressBar = progressContainer.querySelector('progress');
       var progressPerc = progressContainer.querySelector('.relative-progress');
@@ -141,4 +150,5 @@
     window.addEventListener('beforeprint', stopPropagationIfNeeded, false);
     window.addEventListener('afterprint', stopPropagationIfNeeded, false);
   }
-})();
+//#endif
+}));

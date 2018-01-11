@@ -16,19 +16,17 @@
 'use strict';
 
 if (!PDFJS.PDFViewer || !PDFJS.getDocument) {
-  alert('Please build the library and components using\n' +
-        '  `node make generic components`');
+  alert('Please build the pdfjs-dist library using\n' +
+        '  `gulp dist`');
 }
 
-// In cases when the pdf.worker.js is located at the different folder than the
-// pdf.js's one, or the pdf.js is executed via eval(), the workerSrc property
-// shall be specified.
+// The workerSrc property shall be specified.
 //
-// PDFJS.workerSrc = '../../build/pdf.worker.js';
+PDFJS.workerSrc = '../../build/dist/build/pdf.worker.js';
 
 // Some PDFs need external cmaps.
 //
-// PDFJS.cMapUrl = '../../external/bcmaps/';
+// PDFJS.cMapUrl = '../../build/dist/cmaps/';
 // PDFJS.cMapPacked = true;
 
 var DEFAULT_URL = '../../web/compressed.tracemonkey-pldi-09.pdf';
@@ -49,7 +47,7 @@ PDFJS.getDocument(DEFAULT_URL).then(function (pdfDocument) {
       defaultViewport: pdfPage.getViewport(SCALE),
       // We can enable text/annotations layers, if needed
       textLayerFactory: new PDFJS.DefaultTextLayerFactory(),
-      annotationsLayerFactory: new PDFJS.DefaultAnnotationsLayerFactory()
+      annotationLayerFactory: new PDFJS.DefaultAnnotationLayerFactory()
     });
     // Associates the actual page with the view, and drawing it
     pdfPageView.setPdfPage(pdfPage);

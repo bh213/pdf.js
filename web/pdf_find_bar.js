@@ -1,4 +1,3 @@
-/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* Copyright 2012 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,9 +12,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals FindStates, mozL10n */
 
 'use strict';
+
+(function (root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    define('pdfjs-web/pdf_find_bar', ['exports',
+      'pdfjs-web/ui_utils', 'pdfjs-web/pdf_find_controller'], factory);
+  } else if (typeof exports !== 'undefined') {
+    factory(exports, require('./ui_utils.js'),
+      require('./pdf_find_controller.js'));
+  } else {
+    factory((root.pdfjsWebPDFFindBar = {}), root.pdfjsWebUIUtils,
+      root.pdfjsWebPDFFindController);
+  }
+}(this, function (exports, uiUtils, pdfFindController) {
+
+var mozL10n = uiUtils.mozL10n;
+var FindStates = pdfFindController.FindStates;
 
 /**
  * Creates a "search bar" given a set of DOM elements that act as controls
@@ -32,10 +46,12 @@ var PDFFindBar = (function PDFFindBarClosure() {
     this.highlightAll = options.highlightAllCheckbox || null;
     this.caseSensitive = options.caseSensitiveCheckbox || null;
     this.findMsg = options.findMsg || null;
+    this.findResultsCount = options.findResultsCount || null;
     this.findStatusIcon = options.findStatusIcon || null;
     this.findPreviousButton = options.findPreviousButton || null;
     this.findNextButton = options.findNextButton || null;
     this.findController = options.findController || null;
+    this.eventBus = options.eventBus;
 
     if (this.findController === null) {
       throw new Error('PDFFindBar cannot be used without a ' +
@@ -83,18 +99,23 @@ var PDFFindBar = (function PDFFindBarClosure() {
   }
 
   PDFFindBar.prototype = {
+    reset: function PDFFindBar_reset() {
+      this.updateUIState();
+    },
+
     dispatchEvent: function PDFFindBar_dispatchEvent(type, findPrev) {
-      var event = document.createEvent('CustomEvent');
-      event.initCustomEvent('find' + type, true, true, {
+      this.eventBus.dispatch('find', {
+        source: this,
+        type: type,
         query: this.findField.value,
         caseSensitive: this.caseSensitive.checked,
         highlightAll: this.highlightAll.checked,
         findPrevious: findPrev
       });
-      return window.dispatchEvent(event);
     },
 
-    updateUIState: function PDFFindBar_updateUIState(state, previous) {
+    updateUIState:
+        function PDFFindBar_updateUIState(state, previous, matchCount) {
       var notFound = false;
       var findMsg = '';
       var status = '';
@@ -131,6 +152,26 @@ var PDFFindBar = (function PDFFindBarClosure() {
 
       this.findField.setAttribute('data-status', status);
       this.findMsg.textContent = findMsg;
+
+      this.updateResultsCount(matchCount);
+    },
+
+    updateResultsCount: function(matchCount) {
+      if (!this.findResultsCount) {
+        return; // no UI control is provided
+      }
+
+      // If there are no matches, hide the counter
+      if (!matchCount) {
+        this.findResultsCount.classList.add('hidden');
+        return;
+      }
+
+      // Create the match counter
+      this.findResultsCount.textContent = matchCount.toLocaleString();
+
+      // Show the counter
+      this.findResultsCount.classList.remove('hidden');
     },
 
     open: function PDFFindBar_open() {
@@ -163,3 +204,6 @@ var PDFFindBar = (function PDFFindBarClosure() {
   };
   return PDFFindBar;
 })();
+
+exports.PDFFindBar = PDFFindBar;
+}));

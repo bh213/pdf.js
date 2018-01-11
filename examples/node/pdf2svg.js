@@ -1,5 +1,3 @@
-/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 /* Any copyright is dedicated to the Public Domain.
  * http://creativecommons.org/publicdomain/zero/1.0/ */
 
@@ -10,14 +8,10 @@
 var fs = require('fs');
 
 // HACK few hacks to let PDF.js be loaded not as a module in global space.
-global.window = global;
-global.navigator = { userAgent: 'node' };
-global.PDFJS = {};
-
 require('./domstubs.js');
 
-PDFJS.workerSrc = true;
-require('../../build/singlefile/build/pdf.combined.js');
+// Run `gulp dist` to generate 'pdfjs-dist' npm package files.
+var pdfjsLib = require('../../build/dist');
 
 // Loading file from file system into typed array
 var pdfPath = process.argv[2] || '../../web/compressed.tracemonkey-pldi-09.pdf';
@@ -50,7 +44,7 @@ function getFileNameFromPath(path) {
 
 // Will be using promises to load document, pages and misc data instead of
 // callback.
-PDFJS.getDocument(data).then(function (doc) {
+pdfjsLib.getDocument(data).then(function (doc) {
   var numPages = doc.numPages;
   console.log('# Document Loaded');
   console.log('Number of Pages: ' + numPages);
@@ -65,7 +59,7 @@ PDFJS.getDocument(data).then(function (doc) {
       console.log();
 
       return page.getOperatorList().then(function (opList) {
-        var svgGfx = new PDFJS.SVGGraphics(page.commonObjs, page.objs);
+        var svgGfx = new pdfjsLib.SVGGraphics(page.commonObjs, page.objs);
         svgGfx.embedFonts = true;
         return svgGfx.getSVG(opList, viewport).then(function (svg) {
           var svgDump = svg.toString();

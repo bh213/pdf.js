@@ -1,4 +1,4 @@
-/* Copyright 2013 Rob Wu <gwnRob@gmail.com>
+/* Copyright 2013 Rob Wu <rob@robwu.nl>
  * https://github.com/Rob--W/grab-to-pan.js
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,15 @@
 
 'use strict';
 
-var GrabToPan = (function GrabToPanClosure() {
+(function (root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    define('pdfjs-web/grab_to_pan', ['exports'], factory);
+  } else if (typeof exports !== 'undefined') {
+    factory(exports);
+  } else {
+    factory((root.pdfjsWebGrabToPan = {}));
+  }
+}(this, function (exports) {
   /**
    * Construct a GrabToPan instance for a given HTML element.
    * @param options.element {Element}
@@ -207,7 +215,7 @@ var GrabToPan = (function GrabToPanClosure() {
       // http://www.w3.org/TR/DOM-Level-3-Events/#events-MouseEvent-buttons
       // Firefox 15+
       // Internet Explorer 10+
-      return !(event.buttons | 1);
+      return !(event.buttons & 1);
     }
     if (isChrome15OrOpera15plus || isSafari6plus) {
       // Chrome 14+
@@ -217,5 +225,5 @@ var GrabToPan = (function GrabToPanClosure() {
     }
   }
 
-  return GrabToPan;
-})();
+  exports.GrabToPan = GrabToPan;
+}));

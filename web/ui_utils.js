@@ -1,4 +1,3 @@
-/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* Copyright 2012 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,72 +15,78 @@
 
 'use strict';
 
+(function (root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    define('pdfjs-web/ui_utils', ['exports', 'pdfjs-web/pdfjs'], factory);
+  } else if (typeof exports !== 'undefined') {
+    factory(exports, require('./pdfjs.js'));
+  } else {
+    factory((root.pdfjsWebUIUtils = {}), root.pdfjsWebPDFJS);
+  }
+}(this, function (exports, pdfjsLib) {
+
 var CSS_UNITS = 96.0 / 72.0;
-var DEFAULT_SCALE = 'auto';
+var DEFAULT_SCALE_VALUE = 'auto';
+var DEFAULT_SCALE = 1.0;
 var UNKNOWN_SCALE = 0;
 var MAX_AUTO_SCALE = 1.25;
 var SCROLLBAR_PADDING = 40;
 var VERTICAL_PADDING = 5;
 
-// optimised CSS custom property getter/setter
-var CustomStyle = (function CustomStyleClosure() {
+var mozL10n = document.mozL10n || document.webL10n;
 
-  // As noted on: http://www.zachstronaut.com/posts/2009/02/17/
-  //              animate-css-transforms-firefox-webkit.html
-  // in some versions of IE9 it is critical that ms appear in this list
-  // before Moz
-  var prefixes = ['ms', 'Moz', 'Webkit', 'O'];
-  var _cache = {};
+var PDFJS = pdfjsLib.PDFJS;
 
-  function CustomStyle() {}
+/**
+ * Disables fullscreen support, and by extension Presentation Mode,
+ * in browsers which support the fullscreen API.
+ * @var {boolean}
+ */
+PDFJS.disableFullscreen = (PDFJS.disableFullscreen === undefined ?
+                           false : PDFJS.disableFullscreen);
 
-  CustomStyle.getProp = function get(propName, element) {
-    // check cache only when no element is given
-    if (arguments.length === 1 && typeof _cache[propName] === 'string') {
-      return _cache[propName];
-    }
+/**
+ * Enables CSS only zooming.
+ * @var {boolean}
+ */
+PDFJS.useOnlyCssZoom = (PDFJS.useOnlyCssZoom === undefined ?
+                        false : PDFJS.useOnlyCssZoom);
 
-    element = element || document.documentElement;
-    var style = element.style, prefixed, uPropName;
+/**
+ * The maximum supported canvas size in total pixels e.g. width * height.
+ * The default value is 4096 * 4096. Use -1 for no limit.
+ * @var {number}
+ */
+PDFJS.maxCanvasPixels = (PDFJS.maxCanvasPixels === undefined ?
+                         16777216 : PDFJS.maxCanvasPixels);
 
-    // test standard property first
-    if (typeof style[propName] === 'string') {
-      return (_cache[propName] = propName);
-    }
+/**
+ * Disables saving of the last position of the viewed PDF.
+ * @var {boolean}
+ */
+PDFJS.disableHistory = (PDFJS.disableHistory === undefined ?
+                        false : PDFJS.disableHistory);
 
-    // capitalize
-    uPropName = propName.charAt(0).toUpperCase() + propName.slice(1);
+/**
+ * Disables creation of the text layer that used for text selection and search.
+ * @var {boolean}
+ */
+PDFJS.disableTextLayer = (PDFJS.disableTextLayer === undefined ?
+                          false : PDFJS.disableTextLayer);
 
-    // test vendor specific properties
-    for (var i = 0, l = prefixes.length; i < l; i++) {
-      prefixed = prefixes[i] + uPropName;
-      if (typeof style[prefixed] === 'string') {
-        return (_cache[propName] = prefixed);
-      }
-    }
+/**
+ * Disables maintaining the current position in the document when zooming.
+ */
+PDFJS.ignoreCurrentPositionOnZoom = (PDFJS.ignoreCurrentPositionOnZoom ===
+  undefined ? false : PDFJS.ignoreCurrentPositionOnZoom);
 
-    //if all fails then set to undefined
-    return (_cache[propName] = 'undefined');
-  };
-
-  CustomStyle.setProp = function set(propName, element, str) {
-    var prop = this.getProp(propName);
-    if (prop !== 'undefined') {
-      element.style[prop] = str;
-    }
-  };
-
-  return CustomStyle;
-})();
-
-function getFileName(url) {
-  var anchor = url.indexOf('#');
-  var query = url.indexOf('?');
-  var end = Math.min(
-    anchor > 0 ? anchor : url.length,
-    query > 0 ? query : url.length);
-  return url.substring(url.lastIndexOf('/', end) + 1, end);
-}
+//#if !(FIREFOX || MOZCENTRAL)
+/**
+ * Interface locale settings.
+ * @var {string}
+ */
+PDFJS.locale = (PDFJS.locale === undefined ? navigator.language : PDFJS.locale);
+//#endif
 
 /**
  * Returns scale factor for the canvas. It makes sense for the HiDPI displays.
@@ -106,22 +111,26 @@ function getOutputScale(ctx) {
 
 /**
  * Scrolls specified element into view of its parent.
- * element {Object} The element to be visible.
- * spot {Object} An object with optional top and left properties,
- *               specifying the offset from the top left edge.
+ * @param {Object} element - The element to be visible.
+ * @param {Object} spot - An object with optional top and left properties,
+ *   specifying the offset from the top left edge.
+ * @param {boolean} skipOverflowHiddenElements - Ignore elements that have
+ *   the CSS rule `overflow: hidden;` set. The default is false.
  */
-function scrollIntoView(element, spot) {
+function scrollIntoView(element, spot, skipOverflowHiddenElements) {
   // Assuming offsetParent is available (it's not available when viewer is in
   // hidden iframe or object). We have to scroll: if the offsetParent is not set
   // producing the error. See also animationStartedClosure.
   var parent = element.offsetParent;
-  var offsetY = element.offsetTop + element.clientTop;
-  var offsetX = element.offsetLeft + element.clientLeft;
   if (!parent) {
     console.error('offsetParent is not set -- cannot scroll');
     return;
   }
-  while (parent.clientHeight === parent.scrollHeight) {
+  var checkOverflow = skipOverflowHiddenElements || false;
+  var offsetY = element.offsetTop + element.clientTop;
+  var offsetX = element.offsetLeft + element.clientLeft;
+  while (parent.clientHeight === parent.scrollHeight ||
+         (checkOverflow && getComputedStyle(parent).overflow === 'hidden')) {
     if (parent.dataset._scaleY) {
       offsetY /= parent.dataset._scaleY;
       offsetX /= parent.dataset._scaleX;
@@ -180,6 +189,21 @@ function watchScroll(viewAreaElement, callback) {
 }
 
 /**
+ * Helper function to parse query string (e.g. ?param1=value&parm2=...).
+ */
+function parseQueryString(query) {
+  var parts = query.split('&');
+  var params = {};
+  for (var i = 0, ii = parts.length; i < ii; ++i) {
+    var param = parts[i].split('=');
+    var key = param[0].toLowerCase();
+    var value = param.length > 1 ? param[1] : null;
+    params[decodeURIComponent(key)] = decodeURIComponent(value);
+  }
+  return params;
+}
+
+/**
  * Use binary search to find the index of the first item in a given array which
  * passes a given condition. The items are expected to be sorted in the sense
  * that if the condition is true for one item in the array, then it is also true
@@ -209,6 +233,55 @@ function binarySearchFirstItem(items, condition) {
     }
   }
   return minIndex; /* === maxIndex */
+}
+
+/**
+ *  Approximates float number as a fraction using Farey sequence (max order
+ *  of 8).
+ *  @param {number} x - Positive float number.
+ *  @returns {Array} Estimated fraction: the first array item is a numerator,
+ *                   the second one is a denominator.
+ */
+function approximateFraction(x) {
+  // Fast paths for int numbers or their inversions.
+  if (Math.floor(x) === x) {
+    return [x, 1];
+  }
+  var xinv = 1 / x;
+  var limit = 8;
+  if (xinv > limit) {
+    return [1, limit];
+  } else  if (Math.floor(xinv) === xinv) {
+    return [1, xinv];
+  }
+
+  var x_ = x > 1 ? xinv : x;
+  // a/b and c/d are neighbours in Farey sequence.
+  var a = 0, b = 1, c = 1, d = 1;
+  // Limiting search to order 8.
+  while (true) {
+    // Generating next term in sequence (order of q).
+    var p = a + c, q = b + d;
+    if (q > limit) {
+      break;
+    }
+    if (x_ <= p / q) {
+      c = p; d = q;
+    } else {
+      a = p; b = q;
+    }
+  }
+  // Select closest of the neighbours to x.
+  if (x_ - a / b < c / d - x_) {
+    return x_ === x ? [a, b] : [b, a];
+  } else {
+    return x_ === x ? [c, d] : [d, c];
+  }
+}
+
+function roundToDivide(x, div) {
+  var r = x % div;
+  return r === 0 ? x : Math.round(x - r + div);
 }
 
 /**
@@ -311,6 +384,49 @@ function getPDFFileNameFromURL(url) {
   return suggestedFilename || 'document.pdf';
 }
 
+/**
+ * Simple event bus for an application. Listeners are attached using the
+ * `on` and `off` methods. To raise an event, the `dispatch` method shall be
+ * used.
+ */
+var EventBus = (function EventBusClosure() {
+  function EventBus() {
+    this._listeners = Object.create(null);
+  }
+  EventBus.prototype = {
+    on: function EventBus_on(eventName, listener) {
+      var eventListeners = this._listeners[eventName];
+      if (!eventListeners) {
+        eventListeners = [];
+        this._listeners[eventName] = eventListeners;
+      }
+      eventListeners.push(listener);
+    },
+    off: function EventBus_on(eventName, listener) {
+      var eventListeners = this._listeners[eventName];
+      var i;
+      if (!eventListeners || ((i = eventListeners.indexOf(listener)) < 0)) {
+        return;
+      }
+      eventListeners.splice(i, 1);
+    },
+    dispatch: function EventBus_dispath(eventName) {
+      var eventListeners = this._listeners[eventName];
+      if (!eventListeners || eventListeners.length === 0) {
+        return;
+      }
+      // Passing all arguments after the eventName to the listeners.
+      var args = Array.prototype.slice.call(arguments, 1);
+      // Making copy of the listeners array in case if it will be modified
+      // during dispatch.
+      eventListeners.slice(0).forEach(function (listener) {
+        listener.apply(null, args);
+      });
+    }
+  };
+  return EventBus;
+})();
+
 var ProgressBar = (function ProgressBarClosure() {
 
   function clamp(v, min, max) {
@@ -392,3 +508,25 @@ var ProgressBar = (function ProgressBarClosure() {
 
   return ProgressBar;
 })();
+
+exports.CSS_UNITS = CSS_UNITS;
+exports.DEFAULT_SCALE_VALUE = DEFAULT_SCALE_VALUE;
+exports.DEFAULT_SCALE = DEFAULT_SCALE;
+exports.UNKNOWN_SCALE = UNKNOWN_SCALE;
+exports.MAX_AUTO_SCALE = MAX_AUTO_SCALE;
+exports.SCROLLBAR_PADDING = SCROLLBAR_PADDING;
+exports.VERTICAL_PADDING = VERTICAL_PADDING;
+exports.mozL10n = mozL10n;
+exports.EventBus = EventBus;
+exports.ProgressBar = ProgressBar;
+exports.getPDFFileNameFromURL = getPDFFileNameFromURL;
+exports.noContextMenuHandler = noContextMenuHandler;
+exports.parseQueryString = parseQueryString;
+exports.getVisibleElements = getVisibleElements;
+exports.roundToDivide = roundToDivide;
+exports.approximateFraction = approximateFraction;
+exports.getOutputScale = getOutputScale;
+exports.scrollIntoView = scrollIntoView;
+exports.watchScroll = watchScroll;
+exports.binarySearchFirstItem = binarySearchFirstItem;
+}));
