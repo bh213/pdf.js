@@ -1072,10 +1072,11 @@ class PDFDocument {
     ) {
       hash = stringToBytes(idArray[0]);
     } else {
+      const substream = this.stream.makeSubStream(0, FINGERPRINT_FIRST_BYTES);
       hash = calculateMD5(
-        this.stream.getByteRange(0, FINGERPRINT_FIRST_BYTES),
+        substream.getBytes(FINGERPRINT_FIRST_BYTES),
         0,
-        FINGERPRINT_FIRST_BYTES
+        Math.min(FINGERPRINT_FIRST_BYTES, this.stream.end)
       );
     }
 

@@ -21,6 +21,8 @@ import {
 import { MissingDataException } from "./core_utils.js";
 import { Stream } from "./stream.js";
 
+const ALLOCATE_NO_CHUNKS_SIZE = 4 * 1024 * 1024;
+
 class ChunkedStream extends Stream {
   constructor(length, chunkSize, manager) {
     super(
@@ -31,7 +33,7 @@ class ChunkedStream extends Stream {
     );
 
     this.chunkSize = chunkSize;
-    this._loadedChunks = new Set();
+    this.loadedChunks = [];
     this.numChunks = Math.ceil(length / chunkSize);
     this.manager = manager;
     this.progressiveDataLength = 0;
@@ -43,7 +45,7 @@ class ChunkedStream extends Stream {
   getMissingChunks() {
     const chunks = [];
     for (let chunk = 0, n = this.numChunks; chunk < n; ++chunk) {
-      if (!this._loadedChunks.has(chunk)) {
+      if (!this.loadedChunks[chunk]) {
         chunks.push(chunk);
       }
     }
@@ -51,7 +53,7 @@ class ChunkedStream extends Stream {
   }
 
   get numChunksLoaded() {
-    return this._loadedChunks.size;
+    return this.loadedChunks.length;
   }
 
   get isDataLoaded() {
@@ -78,7 +80,9 @@ class ChunkedStream extends Stream {
     for (let curChunk = beginChunk; curChunk < endChunk; ++curChunk) {
       // Since a value can only occur *once* in a `Set`, there's no need to
       // manually check `Set.prototype.has()` before adding the value here.
-      this._loadedChunks.add(curChunk);
+      if (!this.loadedChunks[curChunk]) {
+        this.loadedChunks[curChunk] = true;
+      }
     }
   }
 
@@ -97,7 +101,9 @@ class ChunkedStream extends Stream {
     for (let curChunk = beginChunk; curChunk < endChunk; ++curChunk) {
       // Since a value can only occur *once* in a `Set`, there's no need to
       // manually check `Set.prototype.has()` before adding the value here.
-      this._loadedChunks.add(curChunk);
+      if (!this.loadedChunks[curChunk]) {
+        this.loadedChunks[curChunk] = true;
+      }
     }
   }
 
@@ -111,7 +117,7 @@ class ChunkedStream extends Stream {
       return;
     }
 
-    if (!this._loadedChunks.has(chunk)) {
+    if (!this.loadedChunks[chunk]) {
       throw new MissingDataException(pos, pos + 1);
     }
     this.lastSuccessfulEnsureByteChunk = chunk;
@@ -129,7 +135,7 @@ class ChunkedStream extends Stream {
     const beginChunk = Math.floor(begin / chunkSize);
     const endChunk = Math.floor((end - 1) / chunkSize) + 1;
     for (let chunk = beginChunk; chunk < endChunk; ++chunk) {
-      if (!this._loadedChunks.has(chunk)) {
+      if (!this.loadedChunks[chunk]) {
         throw new MissingDataException(begin, end);
       }
     }
@@ -139,7 +145,7 @@ class ChunkedStream extends Stream {
     const numChunks = this.numChunks;
     for (let i = 0; i < numChunks; ++i) {
       const chunk = (beginChunk + i) % numChunks; // Wrap around to beginning.
-      if (!this._loadedChunks.has(chunk)) {
+      if (!this.loadedChunks[chunk]) {
         return chunk;
       }
     }
@@ -147,7 +153,7 @@ class ChunkedStream extends Stream {
   }
 
   hasChunk(chunk) {
-    return this._loadedChunks.has(chunk);
+    return !!this.loadedChunks[chunk];
   }
 
   getByte() {
@@ -230,7 +236,7 @@ class ChunkedStream extends Stream {
       const endChunk = Math.floor((this.end - 1) / chunkSize) + 1;
       const missingChunks = [];
       for (let chunk = beginChunk; chunk < endChunk; ++chunk) {
-        if (!this._loadedChunks.has(chunk)) {
+        if (!this.loadedChunks[chunk]) {
           missingChunks.push(chunk);
         }
       }
@@ -256,13 +262,745 @@ class ChunkedStream extends Stream {
   getBaseStreams() {
     return [this];
   }
+
+  allChunksLoaded() {
+    return this.numChunksLoaded === this.numChunks;
+  }
+}
+
+class ChunkedStreamContinuous extends ChunkedStream {
+  constructor(length, chunkSize, manager) {
+    super(length, chunkSize, manager);
+
+    this.progressiveData = null;
+    this.progressiveDataChunkPosition = 0;
+    this.buffer = {
+      startOffset: 0,
+      start: 0,
+      end: 0,
+      buffer: new Uint8Array(length),
+    };
+
+    this.initialChunk = null;
+    this.totalLength = length;
+    this.bufferCache = [];
+    this.isStream = true;
+  }
+
+  ensureByte(pos) {
+    this.prepareBuffer(pos, pos + 1);
+  }
+
+  ensureRange(begin, end) {
+    if (begin >= end) {
+      return;
+    }
+
+    this.prepareBuffer(begin, end);
+  }
+
+  getByte() {
+    const pos = this.pos;
+    if (pos >= this.end) {
+      return -1;
+    }
+    const buffer = this.buffer;
+    const bufferStart = buffer.start;
+
+    if (pos >= bufferStart && pos < buffer.end) {
+      this.pos++;
+      return buffer.buffer[pos - buffer.startOffset];
+    }
+
+    this.prepareBuffer(pos, pos + 1);
+    const byte = this.buffer.buffer[pos - this.buffer.startOffset];
+
+    this.pos++;
+    return byte;
+  }
+
+  getUint16() {
+    const pos = this.pos;
+    this.prepareBuffer(pos, pos + 2);
+    const b0 = this.buffer.buffer[pos - this.buffer.startOffset];
+    const b1 = this.buffer.buffer[pos + 1 - this.buffer.startOffset];
+
+    this.pos += 2;
+    if (b0 === -1 || b1 === -1) {
+      return -1;
+    }
+    return (b0 << 8) + b1;
+  }
+
+  getInt32() {
+    const pos = this.pos;
+    this.prepareBuffer(pos, pos + 4);
+
+    const b0 = this.buffer.buffer[pos - this.buffer.startOffset];
+    const b1 = this.buffer.buffer[pos + 1 - this.buffer.startOffset];
+    const b2 = this.buffer.buffer[pos + 2 - this.buffer.startOffset];
+    const b3 = this.buffer.buffer[pos + 3 - this.buffer.startOffset];
+
+    this.pos += 4;
+    return (b0 << 24) + (b1 << 16) + (b2 << 8) + b3;
+  }
+
+  getBytes(length, forceClamped = false) {
+    const pos = this.pos;
+    const strEnd = this.end;
+
+    if (!length) {
+      this.ensureRange(pos, strEnd);
+
+      return this.buffer.buffer.subarray(
+        pos - this.buffer.startOffset,
+        strEnd - this.buffer.startOffset
+      );
+    }
+
+    let end = pos + length;
+    if (end > strEnd) {
+      end = strEnd;
+    }
+
+    this.ensureRange(pos, end);
+    this.pos = end;
+    return this.buffer.buffer.subarray(
+      pos - this.buffer.startOffset,
+      end - this.buffer.startOffset
+    );
+  }
+
+  getByteRange(begin, end) {
+    this.ensureRange(begin, end);
+    return this.buffer.buffer.subarray(
+      begin - this.buffer.startOffset,
+      end - this.buffer.startOffset
+    );
+  }
+
+  makeSubStream(start, length, dict = null) {
+    function ChunkedStreamSubstream() {}
+    ChunkedStreamSubstream.prototype = Object.create(this);
+    ChunkedStreamSubstream.prototype.getMissingChunks = function () {
+      const chunkSize = this.chunkSize;
+      const beginChunk = Math.floor(this.start / chunkSize);
+      const endChunk = Math.floor((this.end - 1) / chunkSize) + 1;
+      const missingChunks = [];
+      for (let chunk = beginChunk; chunk < endChunk; ++chunk) {
+        if (!this.loadedChunks[chunk]) {
+          missingChunks.push(chunk);
+        }
+      }
+      return missingChunks;
+    };
+    Object.defineProperty(ChunkedStreamSubstream.prototype, "isDataLoaded", {
+      get() {
+        if (this.numChunksLoaded === this.numChunks) {
+          return true;
+        }
+        return this.getMissingChunks().length === 0;
+      },
+      configurable: true,
+    });
+
+    const subStream = new ChunkedStreamSubstream();
+    subStream.ensureRange(start, start + length);
+    subStream.pos = subStream.start = start;
+    subStream.end = start + length || this.end;
+    subStream.dict = dict;
+    subStream.totalLength = subStream.end - subStream.start;
+    subStream.subStream = true;
+
+    if (
+      subStream.start >= subStream.buffer.start &&
+      subStream.end <= subStream.buffer.end
+    ) {
+      // Stream is fully loaded, use fast getByteMethod
+      subStream.getByte = this.createGetByteFast(
+        subStream.buffer.buffer,
+        subStream.end
+      );
+    }
+
+    return subStream;
+  }
+
+  createGetByteFast(buffer, end) {
+    const closureBuffer = buffer;
+    const closureEnd = end;
+    return function () {
+      const pos = this.pos;
+      if (pos >= closureEnd) {
+        return -1;
+      }
+      this.pos++;
+      return closureBuffer[pos];
+    };
+  }
+
+  onReceiveProgressiveData(data) {
+    const chunkSize = this.chunkSize;
+    let position = this.progressiveDataLength;
+    const beginChunk = Math.floor(position / this.chunkSize);
+
+    this.buffer.buffer.set(new Uint8Array(data), position);
+    position += data.byteLength;
+    this.progressiveDataLength = position;
+    const chunkEnd = position;
+    const endChunk =
+      position >= this.end
+        ? this.numChunks
+        : Math.floor(position / this.chunkSize);
+
+    for (let curChunk = beginChunk; curChunk < endChunk; ++curChunk) {
+      if (!(curChunk in this.loadedChunks)) {
+        this.loadedChunks[curChunk] = {
+          chunkOffset: chunkSize * curChunk,
+          start: 0,
+          startOffset: 0,
+          end: chunkEnd,
+          data: this.buffer.buffer,
+        };
+      } else {
+        this.loadedChunks[curChunk].end = chunkEnd;
+      }
+    }
+    // Merge chunks to the left.
+    let curChunk = beginChunk - 1;
+    while (curChunk >= 0 && this.loadedChunks[curChunk]) {
+      this.loadedChunks[curChunk--].end = chunkEnd;
+    }
+
+    if (this.numChunksLoaded === this.numChunks) {
+      // stream is fully loaded, switch to fast getByte
+      this.buffer.start = 0;
+      this.buffer.startOffset = 0;
+      this.buffer.end = this.buffer.buffer.byteLength;
+      this.prepareBuffer = this.prepareBufferNop;
+      this.getByte = this.createGetByteFast(this.buffer.buffer, this.end);
+    }
+  }
+
+  onReceiveData(begin, chunk) {
+    const chunkSize = this.chunkSize;
+    let data = new Uint8Array(chunk);
+
+    if (begin === 0 && data.byteLength % chunkSize !== 0) {
+      this.initialChunk = {
+        start: 0,
+        startOffset: 0,
+        end: 0,
+        buffer: this.buffer.buffer,
+      };
+      this.buffer.buffer.set(data, this.initialChunk.end);
+      this.initialChunk.end += data.byteLength;
+
+      if (data.byteLength > chunkSize) {
+        data = data.subarray(
+          0,
+          data.byteLength - (data.byteLength % chunkSize)
+        );
+      } else {
+        return;
+      }
+    }
+
+    const end = begin + data.byteLength;
+
+    // Using this.length is inaccurate here since this.start can be moved
+    // See ChunkedStreamBase.moveStart()
+    const beginChunk = Math.floor(begin / chunkSize);
+    const endChunk = Math.floor((end - 1) / chunkSize) + 1;
+
+    this.buffer.buffer.set(data, beginChunk * chunkSize);
+
+    let chunkEnd = chunkSize * beginChunk + data.byteLength;
+    if (this.loadedChunks[endChunk]) {
+      chunkEnd = this.loadedChunks[endChunk].end;
+    }
+
+    for (let curChunk = beginChunk; curChunk < endChunk; ++curChunk) {
+      if (!this.loadedChunks[curChunk]) {
+        this.loadedChunks[curChunk] = {
+          chunkOffset: chunkSize * curChunk,
+          start: 0,
+          startOffset: 0,
+          end: chunkEnd,
+          data: this.buffer.buffer,
+        };
+      }
+    }
+    // Merge chunks to the left.
+    let curChunk = beginChunk - 1;
+    while (curChunk >= 0 && this.loadedChunks[curChunk]) {
+      this.loadedChunks[curChunk--].end = chunkEnd;
+    }
+
+    if (this.numChunksLoaded === this.numChunks) {
+      // Stream is fully loaded, switch to fast getByte, prepareBuffer is no
+      // longer needed since memory is continuous.
+      this.initialChunk = null;
+      this.buffer.start = 0;
+      this.buffer.startOffset = 0;
+      this.buffer.end = this.buffer.buffer.byteLength;
+      this.getByte = this.createGetByteFast(this.buffer.buffer, this.end);
+      this.prepareBuffer = this.prepareBufferNop;
+    }
+  }
+
+  prepareBufferNop() {}
+
+  prepareBuffer(begin, end) {
+    if (!end) {
+      return;
+    }
+
+    // Checks if current buffer matches new [begin, end) parameters.
+    if (
+      (this.buffer.start <= begin && end <= this.buffer.end) ||
+      end <= this.progressiveDataLength
+    ) {
+      return;
+    }
+
+    // Checks if there is initial block
+    if (
+      this.initialChunk &&
+      this.initialChunk.start <= begin &&
+      end <= this.initialChunk.end
+    ) {
+      this.buffer = this.initialChunk;
+      return;
+    }
+
+    const chunkSize = this.chunkSize;
+    const beginChunk = Math.floor(begin / chunkSize);
+    const endChunk = Math.floor((end - 1) / chunkSize) + 1;
+    // Check if there are missing chunks.
+    for (let chunk = beginChunk; chunk < endChunk; ++chunk) {
+      if (!this.loadedChunks[chunk]) {
+        throw new MissingDataException(begin, end);
+      }
+    }
+
+    this.buffer.startOffset = 0;
+    this.buffer.start = begin;
+    this.buffer.end = end;
+  }
+}
+
+class ChunkedStreamFragmented extends ChunkedStream {
+  constructor(length, chunkSize, manager) {
+    super(length, chunkSize, manager);
+
+    this.progressiveData = null;
+    this.progressiveDataChunkPosition = 0;
+    this.buffer = {
+      startOffset: -1,
+      start: -1,
+      end: -1,
+      buffer: null,
+    };
+
+    this.initialChunk = null;
+    this.totalLength = length;
+    this.bufferCache = [];
+    this.isStream = true;
+  }
+
+  ensureByte(pos) {
+    this.prepareBuffer(pos, pos + 1);
+  }
+
+  ensureRange(begin, end) {
+    if (begin >= end) {
+      return;
+    }
+
+    this.prepareBuffer(begin, end);
+  }
+
+  getByte() {
+    const pos = this.pos;
+    if (pos >= this.end) {
+      return -1;
+    }
+    const buffer = this.buffer;
+    const bufferStart = buffer.start;
+
+    if (pos >= bufferStart && pos < buffer.end) {
+      this.pos++;
+      return buffer.buffer[pos - buffer.startOffset];
+    }
+
+    this.prepareBuffer(pos, pos + 1);
+    const byte = this.buffer.buffer[pos - this.buffer.startOffset];
+
+    this.pos++;
+    return byte;
+  }
+
+  getUint16() {
+    const pos = this.pos;
+    this.prepareBuffer(pos, pos + 2);
+    const b0 = this.buffer.buffer[pos - this.buffer.startOffset];
+    const b1 = this.buffer.buffer[pos + 1 - this.buffer.startOffset];
+
+    this.pos += 2;
+    if (b0 === -1 || b1 === -1) {
+      return -1;
+    }
+    return (b0 << 8) + b1;
+  }
+
+  getInt32() {
+    const pos = this.pos;
+    this.prepareBuffer(pos, pos + 4);
+
+    const b0 = this.buffer.buffer[pos - this.buffer.startOffset];
+    const b1 = this.buffer.buffer[pos + 1 - this.buffer.startOffset];
+    const b2 = this.buffer.buffer[pos + 2 - this.buffer.startOffset];
+    const b3 = this.buffer.buffer[pos + 3 - this.buffer.startOffset];
+
+    this.pos += 4;
+    return (b0 << 24) + (b1 << 16) + (b2 << 8) + b3;
+  }
+
+  getBytes(length, forceClamped = false) {
+    const pos = this.pos;
+    const strEnd = this.end;
+
+    if (!length) {
+      this.ensureRange(pos, strEnd);
+
+      return this.buffer.buffer.subarray(
+        pos - this.buffer.startOffset,
+        strEnd - this.buffer.startOffset
+      );
+    }
+
+    let end = pos + length;
+    if (end > strEnd) {
+      end = strEnd;
+    }
+
+    this.ensureRange(pos, end);
+    this.pos = end;
+    return this.buffer.buffer.subarray(
+      pos - this.buffer.startOffset,
+      end - this.buffer.startOffset
+    );
+  }
+
+  getByteRange(begin, end) {
+    this.ensureRange(begin, end);
+    return this.buffer.buffer.subarray(
+      begin - this.buffer.startOffset,
+      end - this.buffer.startOffset
+    );
+  }
+
+  makeSubStream(start, length, dict = null) {
+    function ChunkedStreamSubstream() {}
+    ChunkedStreamSubstream.prototype = Object.create(this);
+    ChunkedStreamSubstream.prototype.getMissingChunks = function () {
+      const chunkSize = this.chunkSize;
+      const beginChunk = Math.floor(this.start / chunkSize);
+      const endChunk = Math.floor((this.end - 1) / chunkSize) + 1;
+      const missingChunks = [];
+      for (let chunk = beginChunk; chunk < endChunk; ++chunk) {
+        if (!this.loadedChunks[chunk]) {
+          missingChunks.push(chunk);
+        }
+      }
+      return missingChunks;
+    };
+    Object.defineProperty(ChunkedStreamSubstream.prototype, "isDataLoaded", {
+      get() {
+        if (this.numChunksLoaded === this.numChunks) {
+          return true;
+        }
+        return this.getMissingChunks().length === 0;
+      },
+      configurable: true,
+    });
+
+    const subStream = new ChunkedStreamSubstream();
+    subStream.ensureRange(start, start + length);
+    subStream.pos = subStream.start = start;
+    subStream.end = start + length || this.end;
+    subStream.dict = dict;
+    subStream.totalLength = subStream.end - subStream.start;
+    subStream.subStream = true;
+
+    if (
+      subStream.start >= subStream.buffer.start &&
+      subStream.end <= subStream.buffer.end
+    ) {
+      // Stream is fully loaded, use fast getByteMethod
+      subStream.getByte = this.createGetByteFast(
+        subStream.buffer.buffer,
+        subStream.end
+      );
+    }
+
+    return subStream;
+  }
+
+  createGetByteFast() {
+    return this.getByteFast;
+  }
+
+  getByteFast() {
+    const pos = this.pos;
+    if (pos >= this.end) {
+      return -1;
+    }
+    const buffer = this.buffer;
+
+    this.pos++;
+    return buffer.buffer[pos - buffer.startOffset];
+  }
+
+  onReceiveProgressiveData(data) {
+    data = new Uint8Array(data);
+    // progressiveDataLength is always aligned with chunk offsets.
+    const position = this.progressiveDataLength;
+
+    // First progressive data should be usable even if it is smaller than
+    // chunk size.
+    if (position === 0) {
+      if (!this.initialChunk) {
+        this.initialChunk = {
+          start: 0,
+          startOffset: 0,
+          end: 0,
+          buffer: new Uint8Array(Math.max(this.chunkSize, data.byteLength)),
+        };
+      }
+      this.initialChunk.buffer.set(
+        data.subarray(
+          0,
+          Math.min(
+            this.initialChunk.buffer.byteLength - this.initialChunk.end,
+            data.byteLength
+          )
+        ),
+        this.initialChunk.end
+      );
+      this.initialChunk.end += data.byteLength;
+    }
+
+    const end = Math.min(
+      position + data.byteLength + this.progressiveDataChunkPosition,
+      this.end
+    );
+
+    let receiveData;
+    let receiveDataSize =
+      Math.floor(
+        (data.byteLength + this.progressiveDataChunkPosition) / this.chunkSize
+      ) * this.chunkSize;
+    if (end === this.end) {
+      receiveDataSize += end % this.chunkSize;
+    }
+
+    if (this.progressiveData === null) {
+      // There is no stored progressive data yet.
+      if (receiveDataSize === 0) {
+        // Not enough data to fill a chunk.
+        this.progressiveData = data;
+        this.progressiveDataChunkPosition = data.byteLength;
+        return;
+      }
+      // Enough data for one chunk or more.
+      receiveData = data.subarray(0, receiveDataSize);
+      if (data.byteLength > receiveDataSize) {
+        // Leftover data
+        this.progressiveData = data.subarray(receiveDataSize);
+        this.progressiveDataChunkPosition = this.progressiveData.byteLength;
+      } else {
+        // Progress data size is aligned with chunk size (rare).
+        this.progressiveData = null;
+        this.progressiveDataChunkPosition = 0;
+      }
+    } else {
+      // Previous progress data that was not sent to onReceiveData exists.
+      if (receiveDataSize > 0) {
+        // Merged data will produce at least one chunk.
+        receiveData = new Uint8Array(receiveDataSize);
+        receiveData.set(
+          this.progressiveData.subarray(0, this.progressiveDataChunkPosition)
+        );
+        receiveData.set(
+          data.subarray(0, receiveDataSize - this.progressiveDataChunkPosition),
+          this.progressiveDataChunkPosition
+        );
+
+        const dataLeft =
+          data.byteLength -
+          (receiveDataSize - this.progressiveDataChunkPosition);
+        if (dataLeft > 0) {
+          // There is data left that won't be sent to onReceiveData yet.
+          this.progressiveData = new Uint8Array(this.chunkSize);
+          this.progressiveDataChunkPosition = dataLeft;
+          this.progressiveData.set(data.subarray(data.byteLength - dataLeft));
+        } else {
+          this.progressiveData = null;
+          this.progressiveDataChunkPosition = 0;
+        }
+      } else {
+        // There is preexisting data but not enough to fill even one chunk.
+        receiveData = new Uint8Array(this.chunkSize);
+        receiveData.set(
+          this.progressiveData,
+          0,
+          this.progressiveDataChunkPosition
+        );
+        receiveData.set(data, this.progressiveDataChunkPosition);
+        this.progressiveData = receiveData;
+        this.progressiveDataChunkPosition += data.byteLength;
+        return;
+      }
+    }
+
+    this.onReceiveData(this.progressiveDataLength, receiveData);
+    this.progressiveDataLength += receiveData.byteLength;
+    if (
+      this.initialChunk &&
+      this.progressiveDataLength >= this.initialChunk.end
+    ) {
+      this.initialChunk = null;
+    }
+  }
+
+  onReceiveData(begin, chunk) {
+    const chunkSize = this.chunkSize;
+    let data = new Uint8Array(chunk);
+
+    if (
+      begin === 0 &&
+      data.byteLength % chunkSize !== 0 &&
+      begin + data.byteLength !== this.end
+    ) {
+      this.initialChunk = {
+        start: 0,
+        startOffset: 0,
+        end: 0,
+        buffer: new Uint8Array(Math.max(this.chunkSize, data.byteLength)),
+      };
+      this.initialChunk.buffer.set(data, this.initialChunk.end);
+      this.initialChunk.end += data.byteLength;
+
+      if (data.byteLength > chunkSize) {
+        data = data.subarray(
+          0,
+          data.byteLength - (data.byteLength % chunkSize)
+        );
+      } else {
+        return;
+      }
+    }
+
+    const end = begin + data.byteLength;
+
+    // Using this.length is inaccurate here since this.start can be moved
+    // See ChunkedStreamBase.moveStart()
+    const beginChunk = Math.floor(begin / chunkSize);
+    const endChunk = Math.floor((end - 1) / chunkSize) + 1;
+
+    for (let curChunk = beginChunk; curChunk < endChunk; ++curChunk) {
+      if (!this.loadedChunks[curChunk]) {
+        this.loadedChunks[curChunk] = {
+          chunkOffset: chunkSize * (curChunk - beginChunk),
+          start: begin,
+          startOffset: begin,
+          end: begin + data.byteLength,
+          data,
+        };
+      }
+    }
+  }
+
+  prepareBuffer(begin, end) {
+    if (!end) {
+      return;
+    }
+
+    // Checks if current buffer matches new [begin, end) parameters.
+    if (this.buffer.start <= begin && end <= this.buffer.end) {
+      return;
+    }
+
+    // Checks if there is initial block
+    if (
+      this.initialChunk &&
+      this.initialChunk.start <= begin &&
+      end <= this.initialChunk.end
+    ) {
+      this.buffer = this.initialChunk;
+      return;
+    }
+
+    const chunkSize = this.chunkSize;
+    const beginChunk = Math.floor(begin / chunkSize);
+    const endChunk = Math.floor((end - 1) / chunkSize) + 1;
+    // Check if there are missing chunks.
+    for (let chunk = beginChunk; chunk < endChunk; ++chunk) {
+      if (!this.loadedChunks[chunk]) {
+        throw new MissingDataException(begin, end);
+      }
+    }
+
+    // Check if we can reuse chunk data as buffer
+    if (
+      this.loadedChunks[beginChunk].data ===
+      this.loadedChunks[endChunk - 1].data
+    ) {
+      // Use chunk data as buffer.
+      this.buffer = {
+        start: this.loadedChunks[beginChunk].start,
+        startOffset: this.loadedChunks[beginChunk].start,
+        end: this.loadedChunks[beginChunk].end,
+        buffer: this.loadedChunks[beginChunk].data,
+      };
+      return;
+    }
+    const bufferSize = (endChunk - beginChunk + 1) * chunkSize;
+    this.buffer = {
+      startOffset: beginChunk * chunkSize,
+      start: beginChunk * chunkSize,
+      end: beginChunk * chunkSize,
+      buffer: new Uint8Array(bufferSize),
+    };
+    // copy data into buffer
+    for (let chunk = beginChunk; chunk <= endChunk; ++chunk) {
+      const chunkInfo = this.loadedChunks[chunk];
+      if (!chunkInfo) {
+        continue;
+      }
+      const srcOffset = (chunk - beginChunk) * chunkSize;
+      const srcEnd = Math.min(
+        chunkInfo.chunkOffset + chunkSize,
+        chunkInfo.data.byteLength
+      );
+      const part = chunkInfo.data.subarray(chunkInfo.chunkOffset, srcEnd);
+      this.buffer.end += part.byteLength;
+      this.buffer.buffer.set(part, srcOffset);
+    }
+  }
 }
 
 class ChunkedStreamManager {
   constructor(pdfNetworkStream, args) {
     this.length = args.length;
     this.chunkSize = args.rangeChunkSize;
-    this.stream = new ChunkedStream(this.length, this.chunkSize, this);
+    this.stream =
+      this.length > ALLOCATE_NO_CHUNKS_SIZE
+        ? new ChunkedStreamFragmented(this.length, this.chunkSize, this)
+        : new ChunkedStreamContinuous(this.length, this.chunkSize, this);
+
     this.pdfNetworkStream = pdfNetworkStream;
     this.disableAutoFetch = args.disableAutoFetch;
     this.msgHandler = args.msgHandler;
@@ -554,4 +1292,9 @@ class ChunkedStreamManager {
   }
 }
 
-export { ChunkedStream, ChunkedStreamManager };
+export {
+  ChunkedStream,
+  ChunkedStreamContinuous,
+  ChunkedStreamFragmented,
+  ChunkedStreamManager,
+};

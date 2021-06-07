@@ -426,7 +426,7 @@ class WorkerMessageHandler {
           pdfManager = newPdfManager;
 
           pdfManager.onLoadedStream().then(function (stream) {
-            handler.send("DataLoaded", { length: stream.bytes.byteLength });
+            handler.send("DataLoaded", { length: stream.length });
           });
         })
         .then(pdfManagerReady, onFailure);

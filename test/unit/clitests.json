@@ -11,6 +11,7 @@
     "api_spec.js",
     "bidi_spec.js",
     "cff_parser_spec.js",
+    "chunkedstream_spec.js",
     "cmap_spec.js",
     "colorspace_spec.js",
     "core_utils_spec.js",

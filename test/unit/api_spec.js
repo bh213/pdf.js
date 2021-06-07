@@ -2067,7 +2067,9 @@ describe("api", function () {
     });
 
     it("should fetch document info and page using ranges", async function () {
-      const initialDataLength = 4000;
+      // initial data length needs to be less than FINGERPRINT_FIRST_BYTES
+      // to trigger request
+      const initialDataLength = 500;
       let fetches = 0;
 
       const data = await dataPromise;
