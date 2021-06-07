@@ -113,7 +113,7 @@ class WorkerMessageHandler {
     if (apiVersion !== workerVersion) {
       throw new Error(
         `The API version "${apiVersion}" does not match ` +
-        `the Worker version "${workerVersion}".`
+          `the Worker version "${workerVersion}".`
       );
     }
 
@@ -131,8 +131,8 @@ class WorkerMessageHandler {
       if (enumerableProperties.length) {
         throw new Error(
           "The `Array.prototype` contains unexpected enumerable properties: " +
-          enumerableProperties.join(", ") +
-          "; thus breaking e.g. `for...in` iteration of `Array`s."
+            enumerableProperties.join(", ") +
+            "; thus breaking e.g. `for...in` iteration of `Array`s."
         );
       }
 
@@ -145,8 +145,8 @@ class WorkerMessageHandler {
       ) {
         throw new Error(
           "The browser/environment lacks native support for critical " +
-          "functionality used by the PDF.js library (e.g. `ReadableStream`); " +
-          "please use a `legacy`-build instead."
+            "functionality used by the PDF.js library (e.g. `ReadableStream`); " +
+            "please use a `legacy`-build instead."
         );
       }
     }
@@ -680,7 +680,7 @@ class WorkerMessageHandler {
               if (start) {
                 info(
                   `page=${pageIndex + 1} - getOperatorList: time=` +
-                  `${Date.now() - start}ms, len=${operatorListInfo.length}`
+                    `${Date.now() - start}ms, len=${operatorListInfo.length}`
                 );
               }
               sink.close();
@@ -707,8 +707,8 @@ class WorkerMessageHandler {
 
     handler.on("GetTextContent", function wphExtractText(data, sink) {
       const pageIndex = data.pageIndex;
-      sink.onPull = function (desiredSize) { };
-      sink.onCancel = function (reason) { };
+      sink.onPull = function (desiredSize) {};
+      sink.onCancel = function (reason) {};
 
       pdfManager.getPage(pageIndex).then(function (page) {
         const task = new WorkerTask("GetTextContent: page " + pageIndex);
@@ -733,7 +733,7 @@ class WorkerMessageHandler {
               if (start) {
                 info(
                   `page=${pageIndex + 1} - getTextContent: time=` +
-                  `${Date.now() - start}ms`
+                    `${Date.now() - start}ms`
                 );
               }
               sink.close();

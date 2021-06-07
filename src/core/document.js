@@ -378,7 +378,7 @@ class Page {
                 .catch(function (reason) {
                   warn(
                     "getOperatorList - ignoring annotation data during " +
-                    `"${task.name}" task: "${reason}".`
+                      `"${task.name}" task: "${reason}".`
                   );
                   return null;
                 })
@@ -1065,7 +1065,11 @@ class PDFDocument {
       hash = stringToBytes(idArray[0]);
     } else {
       const substream = this.stream.makeSubStream(0, FINGERPRINT_FIRST_BYTES);
-      hash = calculateMD5(substream.getBytes(FINGERPRINT_FIRST_BYTES), 0, Math.min(FINGERPRINT_FIRST_BYTES, this.stream.end));
+      hash = calculateMD5(
+        substream.getBytes(FINGERPRINT_FIRST_BYTES),
+        0,
+        Math.min(FINGERPRINT_FIRST_BYTES, this.stream.end)
+      );
     }
 
     const fingerprintBuf = [];
@@ -1104,7 +1108,7 @@ class PDFDocument {
         }
         throw new FormatError(
           "The Linearization dictionary doesn't point " +
-          "to a valid Page dictionary."
+            "to a valid Page dictionary."
         );
       })
       .catch(reason => {

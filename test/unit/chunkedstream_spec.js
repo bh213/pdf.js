@@ -1,19 +1,20 @@
-/* globals expect, it, describe, beforeEach, Stream, ChunkedStreamContinuous,
-   ChunkedStreamFragmented, Dict,  MissingDataException,
-   ALLOCATE_NO_CHUNKS_SIZE, ChunkedStreamBase, jasmine */
-
-"use strict";
+import {
+  ChunkedStream,
+  ChunkedStreamContinuous,
+  ChunkedStreamFragmented,
+} from "../../src/core/chunked_stream.js";
+import { MissingDataException } from "../../src/core/core_utils.js";
 
 describe("stream", function () {
   const arrayComparerThatFixesJasmineIssue786 = function (first, second) {
-
-    const isFirstArray = Array.isArray(first) ||
+    const isFirstArray =
+      Array.isArray(first) ||
       Object.prototype.toString.call(first.buffer) === "[object ArrayBuffer]";
-    const isSecondArray = Array.isArray(second) ||
+    const isSecondArray =
+      Array.isArray(second) ||
       Object.prototype.toString.call(second.buffer) === "[object ArrayBuffer]";
 
     if (isFirstArray || isSecondArray) {
-
       let i = first.length;
       if (i !== second.length) {
         return false;
@@ -26,15 +27,16 @@ describe("stream", function () {
       }
       return true;
     }
+    return false;
   };
 
-  beforeEach(function () {
+  beforeAll(function () {
     jasmine.addCustomEqualityTester(arrayComparerThatFixesJasmineIssue786);
   });
 
   function makeRange(size, start) {
     const offset = start || 0;
-    let arr = new Uint8Array(size);
+    const arr = new Uint8Array(size);
     for (let i = 0; i < size; i++) {
       arr[i] = i + 1 + offset;
     }
@@ -80,8 +82,10 @@ describe("stream", function () {
         testGetByteRange(stream, 11, 1);
       });
 
-      it("more than one chunk size but less than two reports single chunk with" +
-        "data, data over one chunk is not lost", function () {
+      it(
+        "more than one chunk size but less than two reports single chunk with" +
+          "data, data over one chunk is not lost",
+        function () {
           const stream = new ChunkedStreamFragmented(33, 11, null);
           expect(stream instanceof ChunkedStreamContinuous).toBe(false);
           stream.onReceiveData(0, makeRange(13));
@@ -89,11 +93,16 @@ describe("stream", function () {
           expect(stream.hasChunk(1)).toBe(false);
           testGetByteRange(stream, 11, 1);
           testGetByteRange(stream, 2, 12);
-          expectMissingDataException(function () {
-            stream.ensureRange(14, 15);
-          }, 14, 15);
+          expectMissingDataException(
+            function () {
+              stream.ensureRange(14, 15);
+            },
+            14,
+            15
+          );
           expect(stream.initialChunk).toBeTruthy();
-        });
+        }
+      );
 
       it("two times chunk size reports two chunk with data", function () {
         const stream = new ChunkedStreamFragmented(33, 11, null);
@@ -102,46 +111,55 @@ describe("stream", function () {
         expect(stream.hasChunk(1)).toBe(true);
         expect(stream.hasChunk(2)).toBe(false);
         testGetByteRange(stream, 22, 1);
-        expectMissingDataException(function () {
-          stream.ensureRange(22, 23);
-        }, 22, 23);
+        expectMissingDataException(
+          function () {
+            stream.ensureRange(22, 23);
+          },
+          22,
+          23
+        );
         expect(stream.initialChunk).toBeNull();
       });
 
-      it("using progressive with less than chunk size has data but no chunks",
-        function () {
-          const stream = new ChunkedStreamFragmented(33, 11, null);
-          stream.onReceiveProgressiveData(makeRange(10));
-          expect(stream.hasChunk(0)).toBe(false);
-          testGetByteRange(stream, 10, 1);
-          expect(stream.initialChunk).toBeTruthy();
-          stream.onReceiveProgressiveData([9]);
-          expect(stream.initialChunk).toBeNull();
-        });
+      it("using progressive with less than chunk size has data but no chunks", function () {
+        const stream = new ChunkedStreamFragmented(33, 11, null);
+        stream.onReceiveProgressiveData(makeRange(10));
+        expect(stream.hasChunk(0)).toBe(false);
+        testGetByteRange(stream, 10, 1);
+        expect(stream.initialChunk).toBeTruthy();
+        stream.onReceiveProgressiveData([9]);
+        expect(stream.initialChunk).toBeNull();
+      });
 
-      it("using multiple progressive with total chunk size has data and chunk",
-        function () {
-          const stream = new ChunkedStreamFragmented(33, 11, null);
-          stream.onReceiveProgressiveData(makeRange(10));
-          stream.onReceiveProgressiveData(makeRange(1, 10));
-          expect(stream.hasChunk(0)).toBe(true);
-          testGetByteRange(stream, 11, 1);
-          expect(stream.initialChunk).toBeNull();
-        });
+      it("using multiple progressive with total chunk size has data and chunk", function () {
+        const stream = new ChunkedStreamFragmented(33, 11, null);
+        stream.onReceiveProgressiveData(makeRange(10));
+        stream.onReceiveProgressiveData(makeRange(1, 10));
+        expect(stream.hasChunk(0)).toBe(true);
+        testGetByteRange(stream, 11, 1);
+        expect(stream.initialChunk).toBeNull();
+      });
 
-      it("progressive with more than one chunk size but less than two reports " +
-        "single chunk with data, data over one chunk is not lost", function () {
+      it(
+        "progressive with more than one chunk size but less than two reports " +
+          "single chunk with data, data over one chunk is not lost",
+        function () {
           const stream = new ChunkedStreamFragmented(33, 11, null);
           stream.onReceiveProgressiveData(makeRange(13));
           expect(stream.hasChunk(0)).toBe(true);
           expect(stream.hasChunk(1)).toBe(false);
           testGetByteRange(stream, 11, 1);
           testGetByteRange(stream, 2, 12);
-          expectMissingDataException(function () {
-            stream.ensureRange(14, 15);
-          }, 14, 15);
+          expectMissingDataException(
+            function () {
+              stream.ensureRange(14, 15);
+            },
+            14,
+            15
+          );
           expect(stream.initialChunk).toBeTruthy();
-        });
+        }
+      );
     });
 
     describe("initial data is continuous and ", function () {
@@ -160,19 +178,26 @@ describe("stream", function () {
         testGetByteRange(stream, 11, 1);
       });
 
-      it("more than one chunk size but less than two reports single chunk with" +
-        " data, data over one chunk is not lost", function () {
+      it(
+        "more than one chunk size but less than two reports single chunk with" +
+          " data, data over one chunk is not lost",
+        function () {
           const stream = new ChunkedStreamContinuous(33, 11, null);
           stream.onReceiveData(0, makeRange(13));
           expect(stream.hasChunk(0)).toBe(true);
           expect(stream.hasChunk(1)).toBe(false);
           testGetByteRange(stream, 11, 1);
           testGetByteRange(stream, 2, 12);
-          expectMissingDataException(function () {
-            stream.ensureRange(14, 15);
-          }, 14, 15);
+          expectMissingDataException(
+            function () {
+              stream.ensureRange(14, 15);
+            },
+            14,
+            15
+          );
           expect(stream.initialChunk).toBeTruthy();
-        });
+        }
+      );
 
       it("two times chunk size reports two chunk with data", function () {
         const stream = new ChunkedStreamContinuous(33, 11, null);
@@ -181,55 +206,67 @@ describe("stream", function () {
         expect(stream.hasChunk(1)).toBe(true);
         expect(stream.hasChunk(2)).toBe(false);
         testGetByteRange(stream, 22, 1);
-        expectMissingDataException(function () {
-          stream.ensureRange(22, 23);
-        }, 22, 23);
+        expectMissingDataException(
+          function () {
+            stream.ensureRange(22, 23);
+          },
+          22,
+          23
+        );
         expect(stream.initialChunk).toBeNull();
       });
 
-      it("using progressive with less than chunk size has data but no chunks",
+      it("using progressive with less than chunk size has data but no chunks", function () {
+        const stream = new ChunkedStreamContinuous(33, 11, null);
+
+        stream.onReceiveProgressiveData(makeRange(10));
+        expect(stream.hasChunk(0)).toBe(false);
+        testGetByteRange(stream, 10, 1);
+        expect(stream.initialChunk).toBeNull();
+      });
+
+      it("using multiple progressive with total chunk size has data and chunk", function () {
+        const stream = new ChunkedStreamContinuous(33, 11, null);
+        stream.onReceiveProgressiveData(makeRange(10));
+        stream.onReceiveProgressiveData(makeRange(1, 10));
+        expect(stream.hasChunk(0)).toBe(true);
+        testGetByteRange(stream, 11, 1);
+        expect(stream.initialChunk).toBeNull();
+      });
+
+      it(
+        "using multiple progressive with total chunk size larger than single " +
+          "chunk has data and chunk",
         function () {
-          const stream = new ChunkedStreamContinuous(33, 11, null);
-
-          stream.onReceiveProgressiveData(makeRange(10));
-          expect(stream.hasChunk(0)).toBe(false);
-          testGetByteRange(stream, 10, 1);
-          expect(stream.initialChunk).toBeNull();
-        });
-
-      it("using multiple progressive with total chunk size has data and chunk",
-        function () {
-          const stream = new ChunkedStreamContinuous(33, 11, null);
-          stream.onReceiveProgressiveData(makeRange(10));
-          stream.onReceiveProgressiveData(makeRange(1, 10));
-          expect(stream.hasChunk(0)).toBe(true);
-          testGetByteRange(stream, 11, 1);
-          expect(stream.initialChunk).toBeNull();
-        });
-
-      it("using multiple progressive with total chunk size larger than single " +
-        "chunk has data and chunk", function () {
           const stream = new ChunkedStreamContinuous(33, 11, null);
           stream.onReceiveProgressiveData(makeRange(10));
           stream.onReceiveProgressiveData(makeRange(4, 10));
           expect(stream.hasChunk(0)).toBe(true);
           testGetByteRange(stream, 11, 1);
           expect(stream.initialChunk).toBeNull();
-        });
+        }
+      );
 
-      it("progressive with more than one chunk size but less than two reports " +
-        "single chunk with data, data over one chunk is not lost", function () {
+      it(
+        "progressive with more than one chunk size but less than two reports " +
+          "single chunk with data, data over one chunk is not lost",
+        function () {
           const stream = new ChunkedStreamContinuous(33, 11, null);
           stream.onReceiveProgressiveData(makeRange(13));
           expect(stream.hasChunk(0)).toBe(true);
           expect(stream.hasChunk(1)).toBe(false);
           testGetByteRange(stream, 11, 1);
           testGetByteRange(stream, 2, 12);
-          expectMissingDataException(function () {
-            stream.ensureRange(14, 15);
-          }, 14, 15);
+          expectMissingDataException(
+            function () {
+              stream.ensureRange(14, 15);
+            },
+            14,
+            15
+          );
           expect(stream.initialChunk).toBeNull();
-        });
+        }
+      );
     });
 
     describe("getting full data chunked", function () {
@@ -261,7 +298,6 @@ describe("stream", function () {
     });
 
     describe("getting full data continuous", function () {
-
       it("loads the whole file", function () {
         const stream = new ChunkedStreamContinuous(10, 1, null);
         stream.onReceiveData(0, makeRange(10));
@@ -293,9 +329,13 @@ describe("stream", function () {
     describe("stream with no data loaded chunked", function () {
       it("reports missing data by throwing an exception", function () {
         const stream = new ChunkedStreamFragmented(10, 1, null);
-        expectMissingDataException(function () {
-          stream.ensureRange(0, 5);
-        }, 0, 5);
+        expectMissingDataException(
+          function () {
+            stream.ensureRange(0, 5);
+          },
+          0,
+          5
+        );
       });
 
       it("reports all data missing", function () {
@@ -311,9 +351,13 @@ describe("stream", function () {
     describe("stream with no data loaded continuous", function () {
       it("reports missing data by throwing an exception", function () {
         const stream = new ChunkedStreamContinuous(10, 1, null);
-        expectMissingDataException(function () {
-          stream.ensureRange(0, 5);
-        }, 0, 5);
+        expectMissingDataException(
+          function () {
+            stream.ensureRange(0, 5);
+          },
+          0,
+          5
+        );
       });
 
       it("reports all data missing", function () {
@@ -374,7 +418,6 @@ describe("stream", function () {
 
     describe("receiving chunks out of order continuous", function () {
       it("results in continuous memory and chunk organization", function () {
-
         const stream = new ChunkedStreamContinuous(10, 1, null);
         stream.onReceiveData(0, new Uint8Array([1]));
         stream.onReceiveData(4, new Uint8Array([5]));
@@ -441,6 +484,39 @@ describe("stream", function () {
       });
     });
 
+    describe("Mixed progressive and range data, fragmented", function () {
+      it("progressive and range mix", function () {
+        const stream = new ChunkedStreamFragmented(33, 11, null);
+        expect(stream instanceof ChunkedStreamContinuous).toBe(false);
+        stream.onReceiveProgressiveData(makeRange(11));
+        stream.onReceiveData(0, makeRange(11));
+        expect(stream.hasChunk(0)).toBe(true);
+        expect(stream.initialChunk).toBeNull();
+
+        stream.onReceiveProgressiveData(makeRange(11, 11));
+        expect(stream.hasChunk(1)).toBe(true);
+        stream.onReceiveData(11, makeRange(11, 11));
+        expect(stream.hasChunk(1)).toBe(true);
+
+        stream.onReceiveProgressiveData(makeRange(5, 22));
+        expect(stream.hasChunk(2)).toBe(false);
+        stream.onReceiveData(22, makeRange(22, 11));
+        expect(stream.hasChunk(2)).toBe(true);
+      });
+
+      it("progressive and range mix, initial data not full", function () {
+        const stream = new ChunkedStreamFragmented(33, 11, null);
+        expect(stream instanceof ChunkedStreamContinuous).toBe(false);
+        stream.onReceiveProgressiveData(makeRange(5));
+        expect(stream.hasChunk(0)).toBe(false);
+        stream.onReceiveData(0, makeRange(11));
+        expect(stream.hasChunk(0)).toBe(true);
+        expect(stream.initialChunk).toBeTruthy();
+        stream.onReceiveProgressiveData(makeRange(6, 5));
+        expect(stream.initialChunk).toBeNull();
+      });
+    });
+
     describe("Substreams", function () {
       it("chunked reading", function () {
         const stream = new ChunkedStreamFragmented(100, 1, null);
@@ -477,15 +553,23 @@ describe("stream", function () {
         expect(stream instanceof ChunkedStreamContinuous).toBe(false);
         stream.onReceiveData(0, makeRange(10));
 
-        expectMissingDataException(function () {
-          stream.makeSubStream(10, 5);
-        }, 10, 15);
+        expectMissingDataException(
+          function () {
+            stream.makeSubStream(10, 5);
+          },
+          10,
+          15
+        );
 
         // Does not send load request.
-        var sub1 = stream.makeSubStream(30);
-        expectMissingDataException(function () {
-          sub1.getByte();
-        }, 30, 31);
+        const sub1 = stream.makeSubStream(30);
+        expectMissingDataException(
+          function () {
+            sub1.getByte();
+          },
+          30,
+          31
+        );
 
         const sub2 = stream.makeSubStream(0, 10);
         const sub3 = sub2.makeSubStream(0, 10);
@@ -497,9 +581,13 @@ describe("stream", function () {
         testGetByteRange(sub3, 10, 1);
         expect(sub3.getByte()).toBe(-1);
 
-        expectMissingDataException(function () {
-          sub2.makeSubStream(1, 13);  // make request
-        }, 1, 14);
+        expectMissingDataException(
+          function () {
+            sub2.makeSubStream(1, 13); // make request
+          },
+          1,
+          14
+        );
       });
 
       it("continuous data requests testing ", function () {
@@ -507,15 +595,23 @@ describe("stream", function () {
         expect(stream instanceof ChunkedStreamContinuous).toBe(true);
         stream.onReceiveData(0, makeRange(10));
 
-        expectMissingDataException(function () {
-          stream.makeSubStream(10, 5);
-        }, 10, 15);
+        expectMissingDataException(
+          function () {
+            stream.makeSubStream(10, 5);
+          },
+          10,
+          15
+        );
 
         // Does not send load request.
         const sub1 = stream.makeSubStream(30);
-        expectMissingDataException(function () {
-          sub1.getByte();
-        }, 30, 31);
+        expectMissingDataException(
+          function () {
+            sub1.getByte();
+          },
+          30,
+          31
+        );
 
         const sub2 = stream.makeSubStream(0, 10);
         const sub3 = sub2.makeSubStream(0, 10);
@@ -527,15 +623,19 @@ describe("stream", function () {
         testGetByteRange(sub3, 10, 1);
         expect(sub3.getByte()).toBe(-1);
 
-        expectMissingDataException(function () {
-          sub2.makeSubStream(1, 13);  // make request
-        }, 1, 14);
+        expectMissingDataException(
+          function () {
+            sub2.makeSubStream(1, 13); // make request
+          },
+          1,
+          14
+        );
       });
 
       it("chunked getting data", function () {
         const stream = new ChunkedStreamFragmented(100, 1, null);
         expect(stream instanceof ChunkedStreamContinuous).toBe(false);
-        expect(stream instanceof ChunkedStreamBase).toBe(true);
+        expect(stream instanceof ChunkedStream).toBe(true);
         stream.onReceiveData(0, makeRange(10));
 
         const sub10 = stream.makeSubStream(10);
@@ -564,7 +664,7 @@ describe("stream", function () {
         let bytes = stream.getBytes(); // does not advance pos
         expect(bytes).toEqual(makeRange(100));
 
-        bytes = stream.getBytes(10000); //check len
+        bytes = stream.getBytes(10000); // check len
         expect(bytes.byteLength).toBe(100);
         expect(stream.getByte()).toBe(-1); // end reached
       });
@@ -572,7 +672,7 @@ describe("stream", function () {
       it("continuous getting data", function () {
         const stream = new ChunkedStreamContinuous(100, 1, null);
         expect(stream instanceof ChunkedStreamContinuous).toBe(true);
-        expect(stream instanceof ChunkedStreamBase).toBe(true);
+        expect(stream instanceof ChunkedStream).toBe(true);
 
         stream.onReceiveData(0, makeRange(10));
 
@@ -603,7 +703,7 @@ describe("stream", function () {
         let bytes = stream.getBytes(); // does not advance pos
         expect(bytes).toEqual(makeRange(100));
 
-        bytes = stream.getBytes(10000); //check len
+        bytes = stream.getBytes(10000); // check len
         expect(bytes.byteLength).toBe(100);
         expect(stream.getByte()).toBe(-1); // end reached
       });
@@ -616,10 +716,6 @@ describe("stream", function () {
         stream.onReceiveProgressiveData(makeRange(1, 13));
         stream.onReceiveProgressiveData(makeRange(1, 14));
         stream.onReceiveProgressiveData(makeRange(65, 15));
-
-        const sub7 = stream.makeSubStream(7);
-        const sub14 = stream.makeSubStream(14);
-        const sub77 = stream.makeSubStream(77);
 
         expect(stream.getBytes()).toEqual(makeRange(80));
 
@@ -639,10 +735,6 @@ describe("stream", function () {
         stream.onReceiveProgressiveData(makeRange(1, 14));
         stream.onReceiveProgressiveData(makeRange(65, 15));
 
-        const sub7 = stream.makeSubStream(7);
-        const sub14 = stream.makeSubStream(14);
-        const sub77 = stream.makeSubStream(77);
-
         expect(stream.getBytes()).toEqual(makeRange(80));
 
         const sub70at10 = stream.makeSubStream(70, 10);
@@ -657,7 +749,7 @@ describe("stream", function () {
       function testProgressiveMode(streamSize, stream) {
         let pos = 0;
         while (pos < streamSize) {
-          let dataLen = Math.floor((Math.random() * 100000) + 1);
+          let dataLen = Math.floor(Math.random() * 100000 + 1);
           if (pos + dataLen > streamSize) {
             dataLen = streamSize - pos;
           }
@@ -668,13 +760,27 @@ describe("stream", function () {
       }
 
       function testOffBy1(continuousMode) {
-        const streamSizes = [2, 1277, 7703, 103007, 64 * 1024,
-          64 * 1024 - 1, 64 * 1024 + 1];
+        const streamSizes = [
+          2,
+          1277,
+          7703,
+          103007,
+          64 * 1024,
+          64 * 1024 - 1,
+          64 * 1024 + 1,
+        ];
         for (let i = 0; i < streamSizes.length; i++) {
           const streamSize = streamSizes[i];
-          const chunkSizes = [64, 65, 63, 33333, streamSize - 1, streamSize,
-            streamSize + 1];
-          for (var j = 0; j < chunkSizes.length; j++) {
+          const chunkSizes = [
+            64,
+            65,
+            63,
+            33333,
+            streamSize - 1,
+            streamSize,
+            streamSize + 1,
+          ];
+          for (let j = 0; j < chunkSizes.length; j++) {
             const chunkSize = chunkSizes[j];
             let stream;
             if (continuousMode) {
@@ -683,8 +789,9 @@ describe("stream", function () {
               stream = new ChunkedStreamFragmented(streamSize, chunkSize, null);
             }
 
-            expect(stream instanceof ChunkedStreamContinuous)
-              .toBe(continuousMode);
+            expect(stream instanceof ChunkedStreamContinuous).toBe(
+              continuousMode
+            );
             testProgressiveMode(streamSize, stream);
           }
         }
