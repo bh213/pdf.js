@@ -43,6 +43,7 @@ class ChunkedStream extends Stream {
   // If a particular stream does not implement one or more of these methods,
   // an error should be thrown.
   getMissingChunks() {
+    console.log("getMissingChunks");
     const chunks = [];
     for (let chunk = 0, n = this.numChunks; chunk < n; ++chunk) {
       if (!this.loadedChunks[chunk]) {
@@ -53,14 +54,17 @@ class ChunkedStream extends Stream {
   }
 
   get numChunksLoaded() {
+    console.log("numChunksLoaded");
     return this.loadedChunks.length;
   }
 
   get isDataLoaded() {
+    console.log("isDataLoaded");
     return this.numChunksLoaded === this.numChunks;
   }
 
   onReceiveData(begin, chunk) {
+    console.log("onReceiveData", begin, chunk);
     const chunkSize = this.chunkSize;
     if (begin % chunkSize !== 0) {
       throw new Error(`Bad begin offset: ${begin}`);
@@ -87,6 +91,7 @@ class ChunkedStream extends Stream {
   }
 
   onReceiveProgressiveData(data) {
+    console.log("onReceiveProgressiveData", data);
     let position = this.progressiveDataLength;
     const beginChunk = Math.floor(position / this.chunkSize);
 
@@ -108,6 +113,7 @@ class ChunkedStream extends Stream {
   }
 
   ensureByte(pos) {
+    console.log("ensureByte", pos);
     if (pos < this.progressiveDataLength) {
       return;
     }
@@ -124,6 +130,7 @@ class ChunkedStream extends Stream {
   }
 
   ensureRange(begin, end) {
+    console.log("ensureRange", begin, end);
     if (begin >= end) {
       return;
     }
@@ -142,6 +149,7 @@ class ChunkedStream extends Stream {
   }
 
   nextEmptyChunk(beginChunk) {
+    console.log("nextEmptyChunk", beginChunk);
     const numChunks = this.numChunks;
     for (let i = 0; i < numChunks; ++i) {
       const chunk = (beginChunk + i) % numChunks; // Wrap around to beginning.
@@ -153,10 +161,12 @@ class ChunkedStream extends Stream {
   }
 
   hasChunk(chunk) {
+    console.log("hasChunk", chunk);
     return !!this.loadedChunks[chunk];
   }
 
   getByte() {
+    console.log("getByte");
     const pos = this.pos;
     if (pos >= this.end) {
       return -1;
@@ -168,6 +178,7 @@ class ChunkedStream extends Stream {
   }
 
   getBytes(length, forceClamped = false) {
+    console.log("getBytes", length, forceClamped);
     const bytes = this.bytes;
     const pos = this.pos;
     const strEnd = this.end;
@@ -196,6 +207,7 @@ class ChunkedStream extends Stream {
   }
 
   getByteRange(begin, end) {
+    console.log("getByteRange", begin, end);
     if (begin < 0) {
       begin = 0;
     }
@@ -209,6 +221,7 @@ class ChunkedStream extends Stream {
   }
 
   makeSubStream(start, length, dict = null) {
+    console.log("makeSubStream", start, length, dict);
     if (length) {
       if (start + length > this.progressiveDataLength) {
         this.ensureRange(start, start + length);
@@ -260,6 +273,7 @@ class ChunkedStream extends Stream {
   }
 
   getBaseStreams() {
+    console.log("getBaseStreams");
     return [this];
   }
 }
@@ -910,9 +924,11 @@ class ChunkedStreamManager {
   constructor(pdfNetworkStream, args) {
     this.length = args.length;
     this.chunkSize = args.rangeChunkSize;
-    this.stream = this.length > ALLOCATE_NO_CHUNKS_SIZE
-      ? new ChunkedStreamFragmented(this.length, this.chunkSize, this)
-      : new ChunkedStreamContinuous(this.length, this.chunkSize, this);
+    // this.stream = this.length > ALLOCATE_NO_CHUNKS_SIZE
+    //   ? new ChunkedStreamFragmented(this.length, this.chunkSize, this)
+    //   : new ChunkedStreamContinuous(this.length, this.chunkSize, this);
+    this.stream = new ChunkedStream(this.length, this.chunkSize, this);
+
     this.pdfNetworkStream = pdfNetworkStream;
     this.disableAutoFetch = args.disableAutoFetch;
     this.msgHandler = args.msgHandler;

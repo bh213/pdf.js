@@ -272,7 +272,7 @@ class Page {
             .catch(function (reason) {
               warn(
                 "save - ignoring annotation data during " +
-                `"${task.name}" task: "${reason}".`
+                  `"${task.name}" task: "${reason}".`
               );
               return null;
             })
